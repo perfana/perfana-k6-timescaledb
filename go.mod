@@ -50,8 +50,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-// The default build targets upstream k6. For the Breaking-IT fork - which fills
-// requests_error with headers and body, and keeps the URL of a named request -
-// build with `-tags k6fork` and point the module at a checkout of it:
-//   xk6 build --k6-repo go.k6.io/k6/v2 --replace go.k6.io/k6/v2=<fork> \
-//     --build-flags=-tags=k6fork --with github.com/perfana/perfana-k6-timescaledb=.
+// This branch builds against the published Breaking-IT k6 fork (branch
+// breakingit), which fills requests_error with headers and body. Bump with:
+//   go mod edit -replace go.k6.io/k6/v2=github.com/Breaking-IT/k6/v2@<commit>
+replace go.k6.io/k6/v2 => github.com/Breaking-IT/k6/v2 v2.0.0-20260805092904-ef6e0b7c006e

@@ -10,31 +10,23 @@ the JMeter listener.
 
 ## Requirements
 
-Builds against upstream k6 (`go.k6.io/k6/v2`) by default. Two columns then stay
-empty, because upstream keeps the data out of the metric stream entirely:
-`requests_error` has no headers or body, and a request that sets a `name` tag
-records that name as its url — k6 overwrites the `url` tag with the `name` tag,
-so `url_patterns` collects sampler names. The output says so once at startup.
+This is the `breakingit-fork` branch: it builds only against the
+[Breaking-IT k6 fork](https://github.com/Breaking-IT/k6), pinned by the
+`replace` in `go.mod`. For upstream k6, use `main`.
 
-Building with `-tags k6fork` against the
-[Breaking-IT k6 fork](https://github.com/Breaking-IT/k6) fills both, via its
-`httpErrorData` and `httpRequestUrl` options:
+Switch on the fork's `httpErrorData` option so `requests_error` rows carry the
+request and response headers and body:
 
 ```bash
 export K6_HTTP_ERROR_DATA=true
-export K6_HTTP_REQUEST_URL=true
 ```
 
-Set them as environment variables rather than in `export const options`, so the
-same script also runs on upstream k6 — which warns about option fields it does
-not know, but ignores unknown `K6_*` variables silently.
+The output warns once at startup when it is off.
 
-| | upstream k6 | fork, `-tags k6fork` |
-|---|---|---|
-| `requests_raw`, `transactions`, `virtual_users`, `source_element_path` | ✅ | ✅ |
-| `requests_error` rows | ✅ | ✅ |
-| `requests_error` headers and body | ❌ | ✅ |
-| real URLs in `url_patterns` / `requests_error.url` | ❌ named requests record their name | ✅ |
+The published fork does not have `httpRequestUrl` yet, so a request that sets a
+`name` tag still records that name as its url, and `url_patterns` collects
+sampler names for those requests. The output already reads the `request_url`
+metadata the option will add.
 
 ## Features
 
@@ -48,24 +40,19 @@ not know, but ignores unknown `K6_*` variables silently.
 
 ## Build
 
-With [xk6](https://github.com/grafana/xk6) (needs Go 1.25+):
+With [xk6](https://github.com/grafana/xk6) (current xk6 needs Go 1.26+). The `replace` in
+`go.mod` pulls the fork, so no checkout is needed:
 
 ```bash
 go install go.k6.io/xk6/cmd/xk6@latest
-
-# upstream k6
-xk6 build v2.2.0 --k6-repo go.k6.io/k6/v2 \
-  --with github.com/perfana/perfana-k6-timescaledb
-
-# Breaking-IT fork, with the full error detail and real URLs
-git clone https://github.com/Breaking-IT/k6 ../k6
-xk6 build --k6-repo go.k6.io/k6/v2 --replace go.k6.io/k6/v2=../k6 \
-  --build-flags=-trimpath --build-flags="-ldflags=-s -w" --build-flags=-tags=k6fork \
-  --with github.com/perfana/perfana-k6-timescaledb=.
+git clone -b breakingit-fork <this repo> perfana-k6-timescaledb
+xk6 build --k6-repo go.k6.io/k6/v2 \
+  --replace go.k6.io/k6/v2=github.com/Breaking-IT/k6/v2@v2.0.0-20260805092904-ef6e0b7c006e \
+  --build-flags=-trimpath --build-flags="-ldflags=-s -w" \
+  --with github.com/perfana/perfana-k6-timescaledb=./perfana-k6-timescaledb
 ```
 
-`go build` and `go test` target upstream; add `-tags k6fork` with the module
-replaced to exercise the other half.
+`go build` and `go test` build against the fork as they are.
 
 ## Database setup
 
@@ -228,8 +215,6 @@ See [examples/example.js](examples/example.js) for a runnable script.
 
 ```bash
 go test ./...
-xk6 build --k6-repo go.k6.io/k6/v2 --replace go.k6.io/k6/v2=../k6 \
-  --with github.com/perfana/perfana-k6-timescaledb=.
 ```
 
 ## License

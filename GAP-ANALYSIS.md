@@ -159,13 +159,15 @@ number: `response_time - response_connect_time`. On reused connections
 `breakingit`, base k6 v2.1.0) changes this analysis: most of what is impossible
 against upstream k6 is already solved there, and the rest is a small patch.
 
-### Also solved: the request URL of a named request (in use)
+### Not yet published: the request URL of a named request
 
 k6 replaces the `url` tag with the `name` tag as soon as a script names its
 requests, to keep the indexed tag low-cardinality — and the URL then reaches no
 output at all. The fork's `httpRequestUrl` option carries it as sample metadata
 (`request_url`), which is not indexed in atlas, so `url_patterns` and
 `requests_error.url` hold real URLs again. Without it both record sampler names.
+The option exists only on an unpushed local branch so far; the published
+`breakingit` branch lacks it, and this output reads the metadata if present.
 
 ### Already solved: error bodies and headers (in use)
 
@@ -213,10 +215,9 @@ above measures, and what JMeter reports — is the right number anyway.
 
 ### Build implication
 
-The fork-only reads sit behind a `k6fork` build tag (`fork.go` / `upstream.go`),
-so one source tree builds either way. The default targets upstream k6 and gives
-up the error detail and the real URLs; `-tags k6fork` with the module replaced
-by a fork checkout gives them back.
+On `main` the fork-only reads sit behind a `k6fork` build tag. On this
+`breakingit-fork` branch they are the only build: `go.mod` replaces
+`go.k6.io/k6/v2` with a pinned commit of the published fork.
 
 ### Overlap to resolve
 

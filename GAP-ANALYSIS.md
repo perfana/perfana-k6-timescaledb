@@ -147,9 +147,10 @@ number: `response_time - response_connect_time`. On reused connections
 
 ## Not covered
 
-* **Non-HTTP protocols.** gRPC, WebSocket and browser-module metrics do not
-  produce an HTTP trail and are not written to any table. JMeter records every
-  sampler type.
+* **Non-HTTP protocols.** gRPC and WebSocket metrics do not produce an HTTP
+  trail and are not written to any table. JMeter records every sampler type.
+  Browser requests are written on this branch (see the README), from the fork's
+  `browser_http_req_*` metrics; `browser_errors` and its screenshots are not.
 * **Distributed runs.** Each k6 instance writes independently with its own
   `nodeName`, same as multiple JMeter instances. Untested against k6 Cloud.
 

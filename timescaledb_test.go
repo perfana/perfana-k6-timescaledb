@@ -309,3 +309,114 @@ func TestFailedCheckFailsItsTransaction(t *testing.T) {
 		t.Errorf("two failures in one pass must leave no residue, got %v", o.groupFailures)
 	}
 }
+
+// The fork reports a browser request as a bundle of timings followed by a
+// separate browser_http_req_failed bundle, or as one bundle when the request
+// failed before any response. Each must become exactly one requests_raw row.
+func TestBrowserRequests(t *testing.T) {
+	t.Parallel()
+
+	registry := metrics.NewRegistry()
+	m := func(name string, typ metrics.MetricType) *metrics.Metric { return registry.MustNewMetric(name, typ) }
+	duration := m(browserReqDuration, metrics.Trend)
+	connecting := m(browserReqConnecting, metrics.Trend)
+	tls := m(browserReqTLSHandshaking, metrics.Trend)
+	waiting := m(browserReqWaiting, metrics.Trend)
+	received := m(browserDataReceived, metrics.Counter)
+	failed := m(browserReqFailed, metrics.Rate)
+
+	newOutput := func() *Output {
+		cfg := defaultConfig()
+		return &Output{
+			cfg:            cfg,
+			groupFailures:  map[string]int{},
+			pendingBrowser: map[browserKey]*browserRequest{},
+			w: &writer{
+				cfg:           cfg,
+				requestsRaw:   &table{name: "requests_raw"},
+				transactions:  &table{name: "transactions"},
+				requestsError: &table{name: "requests_error"},
+				knownURLs:     map[string]struct{}{},
+			},
+		}
+	}
+	url := "https://shop.example/products/12345/image.png"
+	at := time.Unix(10, 0)
+	timings := func(tags *metrics.TagSet) metrics.Samples {
+		s := func(metric *metrics.Metric, v float64) metrics.Sample {
+			return metrics.Sample{TimeSeries: metrics.TimeSeries{Metric: metric, Tags: tags}, Time: at, Value: v}
+		}
+		return metrics.Samples{s(duration, 20), s(connecting, 5), s(tls, 3), s(waiting, 12), s(received, 4096)}
+	}
+	verdict := func(tags *metrics.TagSet, v float64) metrics.Sample {
+		return metrics.Sample{
+			TimeSeries: metrics.TimeSeries{Metric: failed, Tags: tags}, Time: at, Value: v,
+			HTTPErrorReqHeaders: "GET /img HTTP/1.1", HTTPErrorResHeaders: "HTTP/2 404 Not Found",
+		}
+	}
+	tags := registry.RootTagSet().With("url", url).With("name", url)
+
+	// Success: timings, then the verdict in its own bundle.
+	o := newOutput()
+	o.addBrowserRequest(timings(tags.With("status", "200")))
+	if len(o.w.requestsRaw.rows) != 0 {
+		t.Fatal("the timings must wait for their verdict")
+	}
+	o.addBrowserRequest(metrics.Samples{verdict(tags.With("status", "200"), 0)})
+	rows := o.w.requestsRaw.rows
+	if len(rows) != 1 {
+		t.Fatalf("expected one requests_raw row, got %d", len(rows))
+	}
+	if got := rows[0][7]; got != "https://shop.example/products/{id}/image.png" {
+		t.Errorf("sampler_name = %v, want the url pattern", got)
+	}
+	if size, _ := rows[0][10].(*int32); size == nil || *size != 4096 {
+		t.Errorf("response_size = %v, want 4096", rows[0][10])
+	}
+	// JMeter timings: connect = connecting + tls, response = connect + duration.
+	if rows[0][12] != int32(8) || rows[0][13] != int32(20) || rows[0][14] != int32(28) {
+		t.Errorf("connect/latency/response = %v/%v/%v, want 8/20/28", rows[0][12], rows[0][13], rows[0][14])
+	}
+	if len(o.w.transactions.rows) != 0 || len(o.w.requestsError.rows) != 0 || len(o.pendingBrowser) != 0 {
+		t.Error("a successful page asset must leave no transaction, error or pending entry")
+	}
+
+	// Failure with a response: the verdict carries the error detail.
+	o = newOutput()
+	o.addBrowserRequest(timings(tags.With("status", "404")))
+	o.addBrowserRequest(metrics.Samples{verdict(tags.With("status", "404"), 1)})
+	if len(o.w.requestsError.rows) != 1 {
+		t.Fatalf("expected one error row, got %d", len(o.w.requestsError.rows))
+	}
+	if h, _ := o.w.requestsError.rows[0][17].(*string); h == nil || *h != "HTTP/2 404 Not Found" {
+		t.Errorf("response_headers = %v", o.w.requestsError.rows[0][17])
+	}
+
+	// Failure before any response: one bundle holding timings and verdict.
+	o = newOutput()
+	refused := tags.With("status", "0").With("error", "net::ERR_CONNECTION_REFUSED")
+	o.addBrowserRequest(append(timings(refused), verdict(refused, 1)))
+	if len(o.w.requestsRaw.rows) != 1 || len(o.w.requestsError.rows) != 1 {
+		t.Fatalf("got %d raw / %d error rows, want 1/1", len(o.w.requestsRaw.rows), len(o.w.requestsError.rows))
+	}
+	if got := o.w.requestsError.rows[0][15]; got != "net::ERR_CONNECTION_REFUSED" {
+		t.Errorf("response_message = %v", got)
+	}
+
+	// No verdict ever (Chromium reported no response): written one flush later.
+	o = newOutput()
+	o.addBrowserRequest(timings(tags))
+	o.flushPendingBrowser(false)
+	if len(o.w.requestsRaw.rows) != 0 {
+		t.Fatal("a verdict may still arrive in the next flush")
+	}
+	o.flushPendingBrowser(false)
+	if len(o.w.requestsRaw.rows) != 1 || len(o.pendingBrowser) != 0 {
+		t.Errorf("an orphaned request must be written after one flush")
+	}
+
+	// Anything else is not ours.
+	if newOutput().addBrowserRequest(metrics.Samples{{TimeSeries: metrics.TimeSeries{Metric: m("vus", metrics.Gauge), Tags: tags}}}) {
+		t.Error("non-browser samples must fall through to addOtherSamples")
+	}
+}

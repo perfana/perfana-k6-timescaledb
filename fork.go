@@ -13,11 +13,11 @@ import (
 // an upstream build.
 const buildTarget = "Breaking-IT k6 fork"
 
-// errorDetail pulls the detail the fork attaches to the http_req_failed sample
-// of a failed request. Empty when the httpErrorData option is off.
+// errorDetail pulls the detail the fork attaches to the http_req_failed (or
+// browser_http_req_failed) sample of a failed request. Empty when the httpErrorData option is off.
 func errorDetail(tr *httpext.Trail) httpErrorDetail {
 	for _, s := range tr.Samples {
-		if s.Metric.Name == metrics.HTTPReqFailedName {
+		if s.Metric.Name == metrics.HTTPReqFailedName || s.Metric.Name == browserReqFailed {
 			return httpErrorDetail{s.HTTPErrorReqHeaders, s.HTTPErrorReqBody, s.HTTPErrorResHeaders, s.HTTPErrorResBody}
 		}
 	}

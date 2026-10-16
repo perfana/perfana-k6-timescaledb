@@ -80,6 +80,9 @@ type Output struct {
 	// it degrades to per-group counting, which keeps the failed/total ratio right
 	// but may pin a failure on a concurrent VU's transaction row.
 	groupFailures map[string]int
+
+	// pendingBrowser holds browser requests waiting for their failed sample.
+	pendingBrowser map[browserKey]*browserRequest
 }
 
 // New builds the output. k6 calls this before the test starts.
@@ -91,9 +94,10 @@ func New(params output.Params) (output.Output, error) {
 	logger := params.Logger.WithField("output", outputName)
 	warnMissingCapabilities(logger, params.ScriptOptions)
 	return &Output{
-		cfg:           cfg,
-		logger:        logger,
-		groupFailures: map[string]int{},
+		cfg:            cfg,
+		logger:         logger,
+		groupFailures:  map[string]int{},
+		pendingBrowser: map[browserKey]*browserRequest{},
 	}, nil
 }
 
@@ -123,6 +127,7 @@ func (o *Output) Start() error {
 
 func (o *Output) Stop() error {
 	o.flusher.Stop()
+	o.flushPendingBrowser(true)
 	o.w.close(o.ctx)
 	o.cancel()
 	return nil
@@ -137,11 +142,15 @@ func (o *Output) AddMetricSamples(samples []metrics.SampleContainer) {
 func (o *Output) flush() {
 	for _, container := range o.buf.GetBufferedSamples() {
 		if trail, ok := container.(*httpext.Trail); ok {
-			o.addRequest(trail)
+			o.addRequest(trail, false, nil)
+			continue
+		}
+		if o.addBrowserRequest(container.GetSamples()) {
 			continue
 		}
 		o.addOtherSamples(container.GetSamples())
 	}
+	o.flushPendingBrowser(false)
 	o.w.flush(o.ctx)
 }
 
@@ -179,7 +188,11 @@ func (o *Output) addOtherSamples(samples []metrics.Sample) {
 	}
 }
 
-func (o *Output) addRequest(tr *httpext.Trail) {
+// addRequest writes one request. A browser request is a page's sub-resource
+// rather than a step of the script, so it never becomes a single-step
+// transaction, and its sampler name is the URL pattern when the script did not
+// name it (the fork sets the name tag to the full URL).
+func (o *Output) addRequest(tr *httpext.Trail, browser bool, responseSize *int32) {
 	name := tag(tr.Tags, "name")
 	// A script that names its requests makes k6 overwrite the url tag with that
 	// name, so the real URL survives only in metadata, and only on the fork with
@@ -191,6 +204,9 @@ func (o *Output) addRequest(tr *httpext.Trail) {
 	}
 	if url == "" {
 		url = name
+	}
+	if browser && o.cfg.NormalizeURLs && name == url && url != "" {
+		name = normalizeURL(url).normalized
 	}
 	status := tag(tr.Tags, "status")
 	errorMsg := tag(tr.Tags, "error")
@@ -231,6 +247,7 @@ func (o *Output) addRequest(tr *httpext.Trail) {
 		TransactionName: transactionName,
 		SamplerName:     name,
 		Success:         success,
+		ResponseSize:    responseSize,
 		ResponseCode:    status,
 		ConnectTime:     ms(tr.ConnDuration),
 		// JMeter latency is time-to-first-byte, connection setup included.
@@ -241,7 +258,7 @@ func (o *Output) addRequest(tr *httpext.Trail) {
 			tag(tr.Tags, controllersTag), segments, name),
 	})
 
-	if len(segments) == 0 {
+	if len(segments) == 0 && !browser {
 		o.w.addTransaction(transaction{
 			Time:            tr.EndTime,
 			TransactionName: transactionName,

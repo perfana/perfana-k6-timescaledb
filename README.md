@@ -37,6 +37,28 @@ metadata the option will add.
 - Standard load testing and synthetic monitoring modes
 - Virtual user tracking
 - Full error rows — headers and body — with no test script changes
+- Browser requests (`k6/browser`): every network request a page makes becomes a
+  `requests_raw` row, with the fork's per-phase timings and `response_size`
+
+### Browser requests
+
+The fork reports each request a browser page makes (document, images, scripts,
+XHR) with the same phases as an HTTP request. Each one becomes a
+`requests_raw` row:
+
+- `sampler_name` is the normalized URL pattern, unless the script groups URLs
+  under a name.
+- `response_size` is the bytes Chromium received, which HTTP rows cannot have.
+- A failed request (status outside 200-399, or a network error such as
+  `net::ERR_CONNECTION_REFUSED`) also gets a `requests_error` row with its
+  headers and, when `saveResponseBody` is on, its body.
+
+Requests served from the browser cache are skipped by the fork itself.
+
+A browser request never becomes a single-step transaction: it is a page's
+sub-resource, like a JMeter embedded resource, not a step of the script. It
+still fails the `group()` it runs in, but `group()` does not support async
+code, so most browser scripts get no `transactions` rows from this output.
 
 ## Build
 

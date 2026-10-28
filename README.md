@@ -10,23 +10,21 @@ the JMeter listener.
 
 ## Requirements
 
-This is the `breakingit-fork` branch: it builds only against the
-[Breaking-IT k6 fork](https://github.com/Breaking-IT/k6), pinned by the
-`replace` in `go.mod`. For upstream k6, use `main`.
+This is the `perfana-fork` branch: it builds only against the
+[perfana k6 fork](https://github.com/perfana/k6) (branch `perfana`, stock k6
+v2.2.0 plus two options), pinned by the `replace` in `go.mod`. For upstream k6,
+use `main`; for the Breaking-IT fork's browser timings, use `breakingit-fork`.
 
-Switch on the fork's `httpErrorData` option so `requests_error` rows carry the
-request and response headers and body:
+Switch on both fork options:
 
 ```bash
-export K6_HTTP_ERROR_DATA=true
+export K6_HTTP_ERROR_DATA=true   # requests_error rows get request/response headers and body
+export K6_HTTP_REQUEST_URL=true  # named requests keep their real URL in url_patterns
 ```
 
-The output warns once at startup when it is off.
-
-The published fork does not have `httpRequestUrl` yet, so a request that sets a
-`name` tag still records that name as its url, and `url_patterns` collects
-sampler names for those requests. The output already reads the `request_url`
-metadata the option will add.
+The output warns once at startup for each one that is off. The fork redacts
+`Authorization`, `Proxy-Authorization`, `Cookie` and `Set-Cookie` values and
+caps bodies at 16 KiB.
 
 ## Features
 
@@ -38,22 +36,24 @@ metadata the option will add.
 - Virtual user tracking
 - Full error rows — headers and body — with no test script changes
 - Browser requests (`k6/browser`): every network request a page makes becomes a
-  `requests_raw` row, with the fork's per-phase timings and `response_size`
+  `requests_raw` row with its duration and `response_size`
 
 ### Browser requests
 
-The fork reports each request a browser page makes (document, images, scripts,
-XHR) with the same phases as an HTTP request. Each one becomes a
-`requests_raw` row:
+k6 reports each request a browser page makes (document, images, scripts,
+XHR). Each one becomes a `requests_raw` row:
 
 - `sampler_name` is the normalized URL pattern, unless the script groups URLs
   under a name.
 - `response_size` is the bytes Chromium received, which HTTP rows cannot have.
+- `response_time` is the browser's request duration. The browser module here
+  is stock, so `connect_time` and `latency` are 0; the `breakingit-fork`
+  branch fills them from the Breaking-IT fork's per-phase metrics.
 - A failed request (status outside 200-399, or a network error such as
-  `net::ERR_CONNECTION_REFUSED`) also gets a `requests_error` row with its
-  headers and, when `saveResponseBody` is on, its body.
+  `net::ERR_CONNECTION_REFUSED`) also gets a `requests_error` row, without
+  headers or body: the fork's error data covers `k6/http` only.
 
-Requests served from the browser cache are skipped by the fork itself.
+Requests served from the browser cache are skipped.
 
 A browser request never becomes a single-step transaction: it is a page's
 sub-resource, like a JMeter embedded resource, not a step of the script. It
@@ -67,9 +67,9 @@ With [xk6](https://github.com/grafana/xk6) (current xk6 needs Go 1.26+). The `re
 
 ```bash
 go install go.k6.io/xk6/cmd/xk6@latest
-git clone -b breakingit-fork <this repo> perfana-k6-timescaledb
+git clone -b perfana-fork <this repo> perfana-k6-timescaledb
 xk6 build --k6-repo go.k6.io/k6/v2 \
-  --replace go.k6.io/k6/v2=github.com/Breaking-IT/k6/v2@v2.0.0-20260805092904-ef6e0b7c006e \
+  --replace go.k6.io/k6/v2=github.com/perfana/k6/v2@v2.2.1-0.20261028133532-b3f96252a736 \
   --build-flags=-trimpath --build-flags="-ldflags=-s -w" \
   --with github.com/perfana/perfana-k6-timescaledb=./perfana-k6-timescaledb
 ```

@@ -50,7 +50,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-// This branch builds against the published Breaking-IT k6 fork (branch
-// breakingit), which fills requests_error with headers and body. Bump with:
-//   go mod edit -replace go.k6.io/k6/v2=github.com/Breaking-IT/k6/v2@<commit>
-replace go.k6.io/k6/v2 => github.com/Breaking-IT/k6/v2 v2.0.0-20260805092904-ef6e0b7c006e
+// This branch builds against the perfana k6 fork (branch perfana), which fills
+// requests_error with headers and body. Bump with:
+//   go mod edit -replace go.k6.io/k6/v2=github.com/perfana/k6/v2@<commit>
+replace go.k6.io/k6/v2 => github.com/perfana/k6/v2 v2.2.1-0.20261028133532-b3f96252a736

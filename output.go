@@ -30,7 +30,7 @@ const (
 	// lets a k6 run render the same banded tree as a JMeter run.
 	controllersTag = "controllers"
 
-	// metadataRequestURL mirrors httpext.MetadataRequestURL on the Breaking-IT
+	// metadataRequestURL mirrors httpext.MetadataRequestURL on the perfana
 	// fork. Upstream k6 never sets it, so the lookup simply misses.
 	metadataRequestURL = "request_url"
 )
@@ -301,7 +301,7 @@ func (o *Output) addRequest(tr *httpext.Trail, browser bool, responseSize *int32
 }
 
 // httpErrorDetail is the request and response detail of a failed request. Only
-// the Breaking-IT k6 fork puts it in the metric stream; see fork.go.
+// the perfana k6 fork puts it in the metric stream; see fork.go.
 type httpErrorDetail struct{ reqHeaders, reqBody, resHeaders, resBody string }
 
 // joinNonEmpty puts the request body below its headers, the way the JMeter

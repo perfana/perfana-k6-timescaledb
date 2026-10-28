@@ -8,9 +8,10 @@ import (
 	"gopkg.in/guregu/null.v3"
 )
 
-// The Breaking-IT fork reports every network request a browser page makes with
-// the same phases as an HTTP trail, under browser_* names. Upstream k6 has only
-// browser_http_req_duration, so a browser run there writes nothing.
+// k6 reports every network request a browser page makes under browser_* names.
+// Stock k6 (and the perfana fork) sends only duration, bytes received and the
+// failed verdict; the Breaking-IT fork adds the HTTP phases, which then fill
+// connect and latency.
 const (
 	browserReqDuration       = "browser_http_req_duration"
 	browserReqConnecting     = "browser_http_req_connecting"
@@ -23,7 +24,7 @@ const (
 )
 
 // browserKey pairs a request's timing bundle with its browser_http_req_failed
-// sample, which the fork pushes as a separate bundle right after it. Both share
+// sample, which k6 pushes as a separate bundle right after it. Both share
 // the tag set (interned, so the pointer is identity) and the timestamp.
 type browserKey struct {
 	tags *metrics.TagSet
@@ -41,17 +42,20 @@ type browserRequest struct {
 // reports whether it did. A request whose failed sample has not arrived yet is
 // parked until it does, or until the next flush ends without it.
 func (o *Output) addBrowserRequest(samples []metrics.Sample) bool {
+	if len(samples) > 0 && tag(samples[0].Tags, "from_cache") == "true" {
+		// Served from the browser cache, not the network. The Breaking-IT fork
+		// never emits these; stock k6 does. Its failed sample finds nothing parked.
+		return isBrowserRequest(samples[0].Metric.Name)
+	}
 	var req *browserRequest
 	var failed *metrics.Sample
 	for i := range samples {
 		s := &samples[i]
-		switch s.Metric.Name {
-		case browserReqFailed:
+		if s.Metric.Name == browserReqFailed {
 			failed = s
 			continue
-		case browserReqDuration, browserReqConnecting, browserReqTLSHandshaking,
-			browserReqSending, browserReqWaiting, browserReqReceiving, browserDataReceived:
-		default:
+		}
+		if !isBrowserRequest(s.Metric.Name) {
 			continue
 		}
 		if req == nil {
@@ -81,6 +85,15 @@ func (o *Output) addBrowserRequest(samples []metrics.Sample) bool {
 	return true
 }
 
+func isBrowserRequest(name string) bool {
+	switch name {
+	case browserReqDuration, browserReqConnecting, browserReqTLSHandshaking, browserReqSending,
+		browserReqWaiting, browserReqReceiving, browserReqFailed, browserDataReceived:
+		return true
+	}
+	return false
+}
+
 func (r *browserRequest) set(s *metrics.Sample) {
 	tr := r.trail
 	d := time.Duration(s.Value * float64(time.Millisecond))
@@ -106,8 +119,8 @@ func (r *browserRequest) set(s *metrics.Sample) {
 
 // flushPendingBrowser writes the parked requests that have already waited one
 // whole flush (all of them when final), judging success from the status tag as
-// the HTTP path does when a trail has no verdict. The fork sends no failed
-// sample when Chromium never reported a response.
+// the HTTP path does when a trail has no verdict. k6 sends no failed sample
+// when Chromium never reported a response.
 func (o *Output) flushPendingBrowser(final bool) {
 	for key, req := range o.pendingBrowser {
 		if req.flushes == 0 && !final {

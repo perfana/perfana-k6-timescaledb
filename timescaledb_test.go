@@ -351,7 +351,9 @@ func TestBrowserRequests(t *testing.T) {
 	verdict := func(tags *metrics.TagSet, v float64) metrics.Sample {
 		return metrics.Sample{
 			TimeSeries: metrics.TimeSeries{Metric: failed, Tags: tags}, Time: at, Value: v,
-			HTTPErrorReqHeaders: "GET /img HTTP/1.1", HTTPErrorResHeaders: "HTTP/2 404 Not Found",
+			Metadata: map[string]string{
+				httpext.MetadataErrorReqHeaders: "GET /img HTTP/1.1", httpext.MetadataErrorResHeaders: "HTTP/2 404 Not Found",
+			},
 		}
 	}
 	tags := registry.RootTagSet().With("url", url).With("name", url)
@@ -413,6 +415,25 @@ func TestBrowserRequests(t *testing.T) {
 	o.flushPendingBrowser(false)
 	if len(o.w.requestsRaw.rows) != 1 || len(o.pendingBrowser) != 0 {
 		t.Errorf("an orphaned request must be written after one flush")
+	}
+
+	// Stock k6: duration and bytes only, so connect and latency stay 0.
+	o = newOutput()
+	o.addBrowserRequest(metrics.Samples{timings(tags)[0], timings(tags)[4]})
+	o.addBrowserRequest(metrics.Samples{verdict(tags, 0)})
+	if rows := o.w.requestsRaw.rows; len(rows) != 1 || rows[0][12] != int32(0) || rows[0][14] != int32(20) {
+		t.Errorf("a duration-only request must be written with response_time 20, got %v", rows)
+	}
+
+	// Served from cache (stock k6 reports these): skipped, verdict included.
+	o = newOutput()
+	cached := tags.With("from_cache", "true")
+	if !o.addBrowserRequest(timings(cached)) || !o.addBrowserRequest(metrics.Samples{verdict(cached, 0)}) {
+		t.Error("cached requests must be consumed")
+	}
+	o.flushPendingBrowser(true)
+	if len(o.w.requestsRaw.rows) != 0 {
+		t.Error("cached requests must not be written")
 	}
 
 	// Anything else is not ours.

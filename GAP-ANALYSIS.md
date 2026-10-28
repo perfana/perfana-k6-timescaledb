@@ -1,6 +1,6 @@
 # Feature parity with perfana-jmeter-timescaledb
 
-Verdict: **close to full parity when built against the Breaking-IT k6 fork; on
+Verdict: **close to full parity when built against the perfana or Breaking-IT k6 fork; on
 upstream k6 the error detail and real URLs are missing** (see
 [Requirements](README.md#requirements) for what each build records).
 Three columns remain unreachable without a patch to k6 itself, and they are
@@ -149,10 +149,28 @@ number: `response_time - response_connect_time`. On reused connections
 
 * **Non-HTTP protocols.** gRPC and WebSocket metrics do not produce an HTTP
   trail and are not written to any table. JMeter records every sampler type.
-  Browser requests are written on this branch (see the README), from the fork's
-  `browser_http_req_*` metrics; `browser_errors` and its screenshots are not.
+  Browser requests are written on this branch (see the README) from stock k6's
+  `browser_http_req_duration`/`browser_data_received`, so `connect_time` and
+  `latency` are 0; the Breaking-IT fork's per-phase metrics need the
+  `breakingit-fork` branch. `browser_errors` and its screenshots are not written.
 * **Distributed runs.** Each k6 instance writes independently with its own
   `nodeName`, same as multiple JMeter instances. Untested against k6 Cloud.
+
+## Addendum: the perfana k6 fork (this branch)
+
+[`perfana/k6`](https://github.com/perfana/k6), branch `perfana`, is stock k6
+v2.2.0 plus the two Breaking-IT options this output needs, and nothing else:
+
+* `httpErrorData` (`K6_HTTP_ERROR_DATA`): on the `http_req_failed` sample of a
+  failed request only, sample metadata gets `error_req_headers`,
+  `error_req_body`, `error_res_headers` and `error_res_body` (constants
+  `httpext.MetadataError*`). Credentials headers are redacted, bodies capped at
+  16 KiB. Unlike Breaking-IT there are no new `metrics.Sample` fields, and the
+  response status line keeps Go's `HTTP/2.0`.
+* `httpRequestUrl` (`K6_HTTP_REQUEST_URL`): `request_url` metadata, described
+  below.
+
+The browser module is stock, so browser failures carry no error data.
 
 ## Addendum: the Breaking-IT k6 fork
 
@@ -160,15 +178,15 @@ number: `response_time - response_connect_time`. On reused connections
 `breakingit`, base k6 v2.1.0) changes this analysis: most of what is impossible
 against upstream k6 is already solved there, and the rest is a small patch.
 
-### Not yet published: the request URL of a named request
+### The request URL of a named request (published in the perfana fork)
 
 k6 replaces the `url` tag with the `name` tag as soon as a script names its
 requests, to keep the indexed tag low-cardinality — and the URL then reaches no
 output at all. The fork's `httpRequestUrl` option carries it as sample metadata
 (`request_url`), which is not indexed in atlas, so `url_patterns` and
 `requests_error.url` hold real URLs again. Without it both record sampler names.
-The option exists only on an unpushed local branch so far; the published
-`breakingit` branch lacks it, and this output reads the metadata if present.
+The published `breakingit` branch lacks it; the perfana fork has it, and this
+output reads the metadata if present.
 
 ### Already solved: error bodies and headers (in use)
 
@@ -216,9 +234,9 @@ above measures, and what JMeter reports — is the right number anyway.
 
 ### Build implication
 
-On `main` the fork-only reads sit behind a `k6fork` build tag. On this
-`breakingit-fork` branch they are the only build: `go.mod` replaces
-`go.k6.io/k6/v2` with a pinned commit of the published fork.
+`main` builds against stock k6. The `breakingit-fork` and `perfana-fork`
+branches each replace `go.k6.io/k6/v2` in `go.mod` with a pinned commit of
+their fork.
 
 ### Overlap to resolve
 

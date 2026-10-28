@@ -69,7 +69,7 @@ With [xk6](https://github.com/grafana/xk6) (current xk6 needs Go 1.26+). The `re
 go install go.k6.io/xk6/cmd/xk6@latest
 git clone -b perfana-fork <this repo> perfana-k6-timescaledb
 xk6 build --k6-repo go.k6.io/k6/v2 \
-  --replace go.k6.io/k6/v2=github.com/perfana/k6/v2@v2.2.1-0.20261028133532-b3f96252a736 \
+  --replace go.k6.io/k6/v2=github.com/perfana/k6/v2@v2.2.1-0.20261028134248-2191e46a9954 \
   --build-flags=-trimpath --build-flags="-ldflags=-s -w" \
   --with github.com/perfana/perfana-k6-timescaledb=./perfana-k6-timescaledb
 ```

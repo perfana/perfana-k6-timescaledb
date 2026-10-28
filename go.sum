@@ -50,8 +50,8 @@ github.com/mstoykov/envconfig v1.5.0 h1:E2FgWf73BQt0ddgn7aoITkQHmgwAcHup1s//MsS5
 github.com/mstoykov/envconfig v1.5.0/go.mod h1:vk/d9jpexY2Z9Bb0uB4Ndesss1Sr0Z9ZiGUrg5o9VGk=
 github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d h1:VhgPp6v9qf9Agr/56bj7Y/xa04UccTW04VP0Qed4vnQ=
 github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d/go.mod h1:YUTz3bUH2ZwIWBy3CJBeOBEugqcmXREj14T+iG/4k4U=
-github.com/perfana/k6/v2 v2.2.1-0.20261028133532-b3f96252a736 h1:xtx+RIMZp4d3A+VcTj5QElUDm6fDmF8/RCQPF15a67c=
-github.com/perfana/k6/v2 v2.2.1-0.20261028133532-b3f96252a736/go.mod h1:7OY2MP0BM2TOKvOXmHbWixaIXmLVnZbbSWiKSQnQnSU=
+github.com/perfana/k6/v2 v2.2.1-0.20261028134248-2191e46a9954 h1:1Sju+/zQD0F2pLS9SzHq4Uvqd88EbZlJO3bxCRab4ZI=
+github.com/perfana/k6/v2 v2.2.1-0.20261028134248-2191e46a9954/go.mod h1:7OY2MP0BM2TOKvOXmHbWixaIXmLVnZbbSWiKSQnQnSU=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=

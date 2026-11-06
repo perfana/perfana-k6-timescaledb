@@ -441,3 +441,37 @@ func TestBrowserRequests(t *testing.T) {
 		t.Error("non-browser samples must fall through to addOtherSamples")
 	}
 }
+
+// http.url`.../${id}` makes k6 tag the request with the literal template.
+func TestURLTemplateName(t *testing.T) {
+	t.Parallel()
+
+	registry := metrics.NewRegistry()
+	tmpl := "https://shop.example/orders/${}/lines?page=${}"
+	cfg := defaultConfig()
+	o := &Output{
+		cfg:           cfg,
+		groupFailures: map[string]int{},
+		w: &writer{
+			cfg:          cfg,
+			requestsRaw:  &table{name: "requests_raw"},
+			transactions: &table{name: "transactions"},
+			knownURLs:    map[string]struct{}{},
+		},
+	}
+	o.addRequest(&httpext.Trail{
+		Tags:     registry.RootTagSet().With("name", tmpl).With("url", tmpl).With("status", "200"),
+		Metadata: map[string]string{},
+	}, false, nil)
+
+	rows := o.w.requestsRaw.rows
+	if len(rows) != 1 {
+		t.Fatalf("expected one requests_raw row, got %d", len(rows))
+	}
+	if got := rows[0][7]; got != "https://shop.example/orders/{val}/lines?page={val}" {
+		t.Errorf("sampler_name = %v", got)
+	}
+	if p := o.w.urlPatterns; len(p) != 1 || p[0].Normalized != "https://shop.example/orders/{val}/lines?page={val}" {
+		t.Errorf("url_patterns = %+v", p)
+	}
+}

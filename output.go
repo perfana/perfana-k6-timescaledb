@@ -193,14 +193,14 @@ func (o *Output) addOtherSamples(samples []metrics.Sample) {
 // transaction, and its sampler name is the URL pattern when the script did not
 // name it (the fork sets the name tag to the full URL).
 func (o *Output) addRequest(tr *httpext.Trail, browser bool, responseSize *int32) {
-	name := tag(tr.Tags, "name")
+	name := urlTemplate(tag(tr.Tags, "name"))
 	// A script that names its requests makes k6 overwrite the url tag with that
 	// name, so the real URL survives only in metadata, and only on the fork with
 	// httpRequestUrl enabled. Without it there is nothing to normalize and
 	// url_patterns would record sampler names.
 	url := tr.Metadata[metadataRequestURL]
 	if url == "" {
-		url = tag(tr.Tags, "url")
+		url = urlTemplate(tag(tr.Tags, "url"))
 	}
 	if url == "" {
 		url = name
@@ -352,7 +352,7 @@ func (o *Output) addFailedCheck(s metrics.Sample) {
 
 	// A script can tag a check with a name; without one the check text is all
 	// there is to call the row.
-	samplerName := tag(s.Tags, "name")
+	samplerName := urlTemplate(tag(s.Tags, "name"))
 	if samplerName == "" {
 		samplerName = check
 	}
@@ -360,7 +360,7 @@ func (o *Output) addFailedCheck(s metrics.Sample) {
 	// A script can tag a check with the request it examined - k6 carries those
 	// tags onto the sample. Without them these stay empty, which is honest: a
 	// check by itself knows nothing about a url or a status.
-	checkURL := tag(s.Tags, "url")
+	checkURL := urlTemplate(tag(s.Tags, "url"))
 	var urlHash *string
 	if o.cfg.NormalizeURLs && checkURL != "" {
 		// Hash only. The request's own row already registered the pattern, and
@@ -453,6 +453,13 @@ func trailFailed(tr *httpext.Trail, status, errorMsg string) bool {
 	}
 	code, err := strconv.Atoi(status)
 	return err != nil || code == 0 || code >= 400
+}
+
+// urlTemplate rewrites the placeholders of a k6 http.url`...${id}` template,
+// which k6 puts in the name and url tags as a literal "${}", into the
+// normalizer's {val} so the row reads like any other normalized URL.
+func urlTemplate(s string) string {
+	return strings.ReplaceAll(s, "${}", "{val}")
 }
 
 func tag(ts *metrics.TagSet, name string) string {

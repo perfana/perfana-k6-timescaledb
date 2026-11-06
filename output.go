@@ -208,6 +208,14 @@ func (o *Output) addRequest(tr *httpext.Trail, browser bool, responseSize *int32
 	if browser && o.cfg.NormalizeURLs && name == url && url != "" {
 		name = normalizeURL(url).normalized
 	}
+	// http.url`${url}` names the request after its template, which can be
+	// nothing but placeholders; the real URL, when the fork kept it, says more.
+	if real := tr.Metadata[metadataRequestURL]; real != "" && strings.Contains(tag(tr.Tags, "name"), "${}") {
+		name = real
+		if o.cfg.NormalizeURLs {
+			name = normalizeURL(real).normalized
+		}
+	}
 	status := tag(tr.Tags, "status")
 	errorMsg := tag(tr.Tags, "error")
 	segments := groupSegments(tag(tr.Tags, "group"))

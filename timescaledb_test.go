@@ -474,4 +474,13 @@ func TestURLTemplateName(t *testing.T) {
 	if p := o.w.urlPatterns; len(p) != 1 || p[0].Normalized != "https://shop.example/orders/{val}/lines?page={val}" {
 		t.Errorf("url_patterns = %+v", p)
 	}
+
+	// http.url`${url}`: the whole URL is a placeholder, so the fork's real URL names it.
+	o.addRequest(&httpext.Trail{
+		Tags:     registry.RootTagSet().With("name", "${}").With("url", "${}").With("status", "200"),
+		Metadata: map[string]string{metadataRequestURL: "https://shop.example/orders/12345"},
+	}, false, nil)
+	if got := o.w.requestsRaw.rows[1][7]; got != "https://shop.example/orders/{id}" {
+		t.Errorf("sampler_name = %v", got)
+	}
 }

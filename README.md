@@ -19,7 +19,7 @@ Switch on both fork options:
 
 ```bash
 export K6_HTTP_ERROR_DATA=true   # requests_error rows get request/response headers and body
-export K6_HTTP_REQUEST_URL=true  # named requests keep their real URL in url_patterns
+export K6_HTTP_REQUEST_URL=true  # named requests keep their real URL in url_patterns; http.url`${url}` requests are named after it
 ```
 
 The output warns once at startup for each one that is off. The fork redacts

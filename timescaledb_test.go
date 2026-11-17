@@ -235,6 +235,29 @@ func TestFailedCheckBecomesErrorRow(t *testing.T) {
 		t.Errorf("assertions = %v, want the check text", rows[0][14])
 	}
 
+	for i := 16; i <= 18; i++ {
+		if v, _ := rows[0][i].(*string); v != nil {
+			t.Errorf("a check without fork detail must leave column %d empty, got %q", i, *v)
+		}
+	}
+
+	// With httpErrorData on, the fork attaches the response the check examined.
+	withDetail := sample(tags, 0)
+	withDetail.Metadata = map[string]string{
+		httpext.MetadataErrorReqHeaders: "POST https://h/x HTTP/1.1",
+		httpext.MetadataErrorReqBody:    "{}",
+		httpext.MetadataErrorResHeaders: "HTTP/1.1 200 OK",
+		httpext.MetadataErrorResBody:    "short",
+	}
+	o = newOutput(cfg)
+	o.addOtherSamples([]metrics.Sample{withDetail})
+	row := o.w.requestsError.rows[0]
+	for i, want := range map[int]string{16: "POST https://h/x HTTP/1.1\n{}", 17: "HTTP/1.1 200 OK", 18: "short"} {
+		if got, ok := row[i].(*string); !ok || *got != want {
+			t.Errorf("column %d = %v, want %q", i, row[i], want)
+		}
+	}
+
 	// A passing check is not an error.
 	o = newOutput(cfg)
 	o.addOtherSamples([]metrics.Sample{sample(tags, 1)})

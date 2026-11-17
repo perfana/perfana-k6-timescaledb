@@ -69,7 +69,7 @@ With [xk6](https://github.com/grafana/xk6) (current xk6 needs Go 1.26+). The `re
 go install go.k6.io/xk6/cmd/xk6@latest
 git clone -b perfana-fork <this repo> perfana-k6-timescaledb
 xk6 build --k6-repo go.k6.io/k6/v2 \
-  --replace go.k6.io/k6/v2=github.com/perfana/k6/v2@v2.2.1-0.20261028134248-2191e46a9954 \
+  --replace go.k6.io/k6/v2=github.com/perfana/k6/v2@v2.2.1-0.20261117100848-dc6a0c3f1a1d \
   --build-flags=-trimpath --build-flags="-ldflags=-s -w" \
   --with github.com/perfana/perfana-k6-timescaledb=./perfana-k6-timescaledb
 ```
@@ -176,9 +176,14 @@ otherwise record no failures at all.
 
 So a failed check becomes its own `requests_error` row, with the check text in
 `assertions` and `response_message`, and the enclosing group as the transaction.
-The row is thin by necessity: a checks sample carries the check name, its group
-and the scenario, and nothing else — there is no url, status or method on it,
-and nothing ties it to the request it examined.
+A checks sample carries the check name, its group and the scenario, and nothing
+else: there is no url, status or method on it, and nothing ties it to the
+request's `requests_raw` row. When the check was given an HTTP response
+(`check(res, ...)`) and `httpErrorData` is on, the fork attaches that response,
+so `request_headers`, `response_headers` and `response_data` show what the check
+rejected. A check on anything else (`check(res.json(), ...)`) stays
+assertion-only, and a response that fails several checks is stored once per
+failed check.
 
 Two consequences worth knowing. A request that fails *and* whose check fails
 produces two rows: one with the full detail, one assertion-only. And a failed

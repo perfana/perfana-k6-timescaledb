@@ -294,17 +294,21 @@ func (o *Output) addRequest(tr *httpext.Trail, browser bool, responseSize *int32
 			ResponseMessage: errorMsg,
 			RandomID:        rand.Int32N(1_000_000), //nolint:gosec // matches the JMeter plugin's random_id
 		}
-		// Optional payload is what gets shed first when the writer falls behind,
-		// same as the JMeter listener.
-		if !o.w.isUnderPressure() {
-			detail := errorDetail(tr)
-			row.RequestHeaders = nonEmpty(joinNonEmpty(detail.reqHeaders, detail.reqBody))
-			row.ResponseHeaders = nonEmpty(detail.resHeaders)
-			if o.cfg.SaveResponseBody {
-				row.ResponseData = nonEmpty(detail.resBody)
-			}
-		}
+		o.setErrorDetail(&row, errorDetail(tr))
 		o.w.addRequestError(row)
+	}
+}
+
+// setErrorDetail fills the optional payload columns of an error row. They are
+// what gets shed first when the writer falls behind, same as the JMeter listener.
+func (o *Output) setErrorDetail(row *requestError, d httpErrorDetail) {
+	if o.w.isUnderPressure() {
+		return
+	}
+	row.RequestHeaders = nonEmpty(joinNonEmpty(d.reqHeaders, d.reqBody))
+	row.ResponseHeaders = nonEmpty(d.resHeaders)
+	if o.cfg.SaveResponseBody {
+		row.ResponseData = nonEmpty(d.resBody)
 	}
 }
 
@@ -334,9 +338,11 @@ func nonEmpty(s string) *string {
 // k6 does not let a failed check fail the request, so requests_raw.success and
 // the transaction verdict both stay true.
 //
-// The row is thin by necessity: a checks sample is tagged with the check name,
-// its group and the scenario, and nothing else. There is no url, status or
-// method to record, and no way to tie it to the request it examined.
+// A checks sample is tagged with the check name, its group and the scenario,
+// and nothing else: there is no url, status or method to record, and no way to
+// tie it to the request's requests_raw row. When the check examined an HTTP
+// response and httpErrorData is on, the fork does attach that response's
+// request and response detail, which fills the payload columns.
 func (o *Output) addFailedCheck(s metrics.Sample) {
 	if !o.cfg.SaveFailedChecks {
 		return
@@ -378,7 +384,7 @@ func (o *Output) addFailedCheck(s metrics.Sample) {
 		urlHash = &n.hash
 	}
 
-	o.w.addRequestError(requestError{
+	row := requestError{
 		Time:            s.Time,
 		TransactionName: transactionName,
 		SamplerName:     samplerName,
@@ -390,7 +396,11 @@ func (o *Output) addFailedCheck(s metrics.Sample) {
 		ResponseMessage: check,
 		ResponseCode:    tag(s.Tags, "status"),
 		RandomID:        rand.Int32N(1_000_000), //nolint:gosec // matches the JMeter plugin's random_id
-	})
+	}
+	// When the check examined an HTTP response, the fork attaches it (with
+	// httpErrorData on), so the row shows what the check rejected.
+	o.setErrorDetail(&row, metadataDetail(s.Metadata))
+	o.w.addRequestError(row)
 
 	// A failed check fails the transaction containing it, the way a failed
 	// JMeter assertion fails its Transaction Controller. The request itself

@@ -19,13 +19,20 @@ const buildTarget = "perfana k6 fork"
 func errorDetail(tr *httpext.Trail) httpErrorDetail {
 	for _, s := range tr.Samples {
 		if s.Metric.Name == metrics.HTTPReqFailedName || s.Metric.Name == browserReqFailed {
-			return httpErrorDetail{
-				s.Metadata[httpext.MetadataErrorReqHeaders], s.Metadata[httpext.MetadataErrorReqBody],
-				s.Metadata[httpext.MetadataErrorResHeaders], s.Metadata[httpext.MetadataErrorResBody],
-			}
+			return metadataDetail(s.Metadata)
 		}
 	}
 	return httpErrorDetail{}
+}
+
+// metadataDetail reads the fork's error detail keys. Besides http_req_failed,
+// the fork writes them on a failed checks sample whose check examined an HTTP
+// response.
+func metadataDetail(md map[string]string) httpErrorDetail {
+	return httpErrorDetail{
+		md[httpext.MetadataErrorReqHeaders], md[httpext.MetadataErrorReqBody],
+		md[httpext.MetadataErrorResHeaders], md[httpext.MetadataErrorResBody],
+	}
 }
 
 // warnMissingCapabilities reports the fork options this output needs but the
